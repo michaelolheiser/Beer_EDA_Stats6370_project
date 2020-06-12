@@ -1,4 +1,3 @@
 # project_beer
 
-test1: Michael is adding a line to test github from R
-test 2: branch Michael
+This repo contains all of the necessary files to complete project 1 in Doing Data Science at SMU. 
