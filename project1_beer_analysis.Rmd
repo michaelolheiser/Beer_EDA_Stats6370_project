@@ -5,8 +5,17 @@ date: "6/12/2020"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(maps)
+library(dplyr)
+library(usmap)
+library(maps)
+library(ggrepel)
+
+
 ```
 
 ## Introduction
@@ -20,13 +29,46 @@ c.	Use R to code answers concerning the seven questions below.
 
 ```{r get_data}
 
-beer<-read.csv("Beers.csv")
-breweries<-read.csv("Breweries.csv")
+
+
+beer<-read.csv("Beers.csv", stringsAsFactors = FALSE)
+breweries<-read.csv("Breweries.csv", stringsAsFactors = FALSE)
 ```
 
 ## Analysis Questions
 
 1.   How many breweries are present in each state?  
+
+```{r map, message=FALSE, warning=FALSE}
+
+breweries$State <- trimws(breweries$State)
+
+# use lat/lon data from us_map package to estomate center of state
+coordinates<-us_map(regions = "states")
+coordinates = coordinates %>% group_by(abbr) %>%
+  summarize(Lat = mean(y), Lon = mean(x))
+
+# re center some coordinates (work in progress)
+coordinates$Lat[coordinates$abbr=="AK"]=-1856040
+coordinates$Lat[coordinates$abbr=="HI"]=-2218611
+
+#sum breweries by state. "fips" is a key for us states 
+state_breweries<-breweries %>% group_by(State) %>%
+  summarise(Count_of_Breweries = n()) %>%
+  mutate(fips = fips(State)) %>%
+  inner_join(coordinates, by=c("State" = "abbr"))
+
+#plot us map 
+plot_usmap(data=state_breweries, values="Count_of_Breweries", color="black") +
+  geom_text(aes(x=Lon, y=Lat, label = Count_of_Breweries)) +
+  scale_fill_continuous(low="white", high="red", name="Number of Breweries") +
+  theme(legend.position = "right") 
+
+#top 10 states
+state_breweries %>% select(State, Count_of_Breweries) %>%
+  arrange(-Count_of_Breweries) %>% head(10)
+
+```
 
 2.   Merge beer data with the breweries data. Print the first 6 observations and the last six observations to check the merged file.  (RMD only, this does not need to be included in the presentation or the deck.)  
 
