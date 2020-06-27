@@ -1,0 +1,240 @@
+---
+title: 'Epxloratory Data Analysis of Beers and Breweries'
+author: "Michael Olheiser , Lijju Mathew, Andre Mauldin,"
+date: "6/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(maps)
+library(dplyr)
+library(tidyr)
+library(usmap)
+library(GGally)
+library(ggthemes)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(stringr)
+library(class)
+library(caTools)
+library(caret)
+library(e1071)
+library(plotly)
+
+```
+
+## Introduction  
+  
+We will be exploring a data set of various beers and breweries provided by Anheuser Busch to assess the relationship between International Bitterness Units (IBU) and Alcohol By Volume (ABV). We will also seek to share other insights from this data related to IBU and ABV such as which beers have the highest IBU and ABV.
+
+```{r get_data}
+
+# read data
+beer<-read.csv("Beers.csv", stringsAsFactors = FALSE)
+breweries<-read.csv("Breweries.csv", stringsAsFactors = FALSE)
+```
+
+## Breweries by State
+  
+The top three states with the most breweries in our data set are California, Colorado, and Michigan. It is not surprising for California to top this list due to their population but Colorado and Michigan have considerably lower populations yet still maintain a higher number of breweries indicating that population is not the only factor that determines the number of breweries in a state. It's likely that certain cultural and economic aspects of the population influence the number of breweries in that state as well. Furthermore, the mpa of the US shows that Breweries do not dominate any particular region of the US.     
+
+```{r map, message=FALSE, warning=FALSE}
+
+breweries$State <- trimws(breweries$State)
+
+# use lat/lon data from us_map package to estomate center of state
+coordinates<-us_map(regions = "states")
+coordinates = coordinates %>% dplyr::group_by(abbr) %>%
+  dplyr::summarize(Lat = mean(y), Lon = mean(x))
+
+#sum breweries by state. "fips" is a key for us states 
+state_breweries<-breweries %>% dplyr::group_by(State) %>%
+  dplyr::summarise(Count_of_Breweries = n()) %>%
+  dplyr::mutate(fips = fips(State)) %>%
+  inner_join(coordinates, by=c("State" = "abbr"))
+
+#plot us map 
+plot_usmap(data=state_breweries, values="Count_of_Breweries", color="black") +
+  scale_fill_continuous(low="white", high="red", name="Number of Breweries") +
+  theme(legend.position = "right") +
+  ggtitle("Breweries in the United States")
+
+# bar chart of states
+breweries %>% dplyr::group_by(State) %>% 
+  dplyr::summarize(count = n()) %>% 
+  ggplot(aes(x=reorder(State, count), y = count)) +
+  geom_bar(stat="identity", width=.5, fill="orange") +
+  labs(title="Number of Breweries Per State",
+     x = "State",
+     y = "Brewereis Count") +     
+     theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
+```
+
+
+
+```{r merge, include=FALSE}
+
+#results include all 2410 observations
+beer_merged<-inner_join(beer, breweries, by=c("Brewery_id" = "Brew_ID"))
+colnames(beer_merged)[1]<-"beer_name"
+colnames(beer_merged)[8]<-"brewery_name"
+
+
+head(beer_merged)
+tail(beer_merged)
+```
+
+## Handling Missing Values  
+
+IBU are not regularly reported for beers indicated in the plot below. Very few measurements of Alcohol by Volume are missing but missing IBU accounts for about 40% of all beers in this data set.  
+
+
+```{r missing, warning=FALSE}
+
+
+#Force any empty strings to become NA. 
+#Style is the only character vector with empty strings
+beer_merged$Style[beer_merged$Style==""]=NA
+
+#Create data frame for missing values plot
+missing_values2 <- beer_merged %>%
+  gather(key = "key", value = "val") %>%
+  dplyr::mutate(isna = is.na(val)) %>%
+  dplyr::group_by(key) %>%
+  dplyr::mutate(total = n()) %>%
+  dplyr::group_by(key, total, isna)%>%
+  dplyr::summarise(num.isna = n())%>%
+  dplyr::mutate(pct = num.isna / total * 100)
+
+levels <- (missing_values2 %>% filter(isna == T) %>% arrange(desc(pct)))$key
+
+#plot percentage of missing values
+percentage.plot <- missing_values2 %>%
+      ggplot() + geom_bar(aes(x = reorder(key, desc(pct)), y = pct, fill=isna), stat = 'identity', alpha=1) +
+      scale_x_discrete(limits = levels) +
+      scale_fill_manual(name = "", values = c('steelblue', 'tomato3'), labels = c("Present", "Missing")) +
+      coord_flip() + 
+      labs(title = "Percentage of missing values", x = 'Variable', y = "% of missing values")
+percentage.plot
+
+#Create table for missing values
+missing_values<-sort(sapply(beer_merged, function(x) sum(is.na(x))), decreasing = T)
+missing_values %>% kable("html") %>% kable_styling()
+
+
+
+
+```
+  
+The missing values for IBU and ABV do not necessarily represent a zero value. We will replace missing IBU and ABV with the average IBU and average ABV for their respective Style. In the case of Ciders, we have 37 beers in our data set with no IBUs so we will assume these IBUs are actually zero. For the eight remaining styles that have no IBUs reported (Mead, Rauchbier, Kristalweizen, Flanders Red Ale, Shandy, American Malt Liquor, Braggot, Low Alcohol Beer), its unclear if these IBUs are actually non-zero so we will omit these which results in dropping only 15 beers from our data set.   
+
+```{r drop_nas}
+
+#drop beers with no style
+beer_merged <- beer_merged[!is.na(beer_merged$Style),]
+
+replaceNAs<-beer_merged %>%
+  dplyr::select(Style, ABV, IBU) %>%
+  dplyr::group_by(Style) %>%
+  dplyr::summarise(meanABV=mean(ABV, na.rm=TRUE), meanIBU=mean(IBU, na.rm=TRUE))
+
+#replace missing ABV with mean ABV per Style
+beer_merged<-left_join(beer_merged, replaceNAs, by="Style")
+beer_merged$ABV[is.na(beer_merged$ABV)]=beer_merged$meanABV[is.na(beer_merged$ABV)]
+
+#replace missing IBU with mean IBU per Style
+beer_merged$IBU[is.na(beer_merged$IBU)]=beer_merged$meanIBU[is.na(beer_merged$IBU)]
+
+#For Cider IBU=0
+beer_merged$IBU[beer_merged$Style=="Cider"]=0
+
+#Drop the remaining styles with no IBUs listed for any beers.
+beer_merged<- beer_merged[!is.na(beer_merged$IBU),]
+```
+
+## Median ABV and IBU by State   
+
+The state with the highest median ABV is Kentucky while the highest IBU is Delaware. In general, the median IBU does not change considerably across States. A couple exceptions to this are New Jersey And Utah which seem to drop off significantly in ABV at the end of the plot. Median IBU has a much larger range across States than ABV. States like Delaware, West Virginia, and Minnesota tend to prefer more bitter beers while states like New Hampshire and Wyoming prefer less bitter. There is no apparent geographical pattern to explain these differences. Further data gathering would need to be done for each state to determine the reason for these differences.    
+
+```{r plot1}
+
+medians = data.frame(beer_merged %>% dplyr::group_by(State) %>%
+dplyr::summarize(median_ABV = median(ABV), median_IBU = median(IBU)))
+
+medABVPlot = medians %>% ggplot(aes(x = reorder(State,-median_ABV), y = median_ABV, fill = State )) + 
+  geom_col() + 
+  ggtitle("Median Alcohol Content of Beers by State") +
+  xlab("State") +
+  ylab("Median ABV") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
+medIBUPlot = medians %>% ggplot(aes(x = reorder(State,-median_IBU), y = median_IBU, fill = State)) + 
+  geom_col() + 
+  ggtitle("Median Bitterness of Beers by State") +
+  xlab("State") +
+  ylab("Median IBU") +
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+
+ggplotly(medABVPlot)
+ggplotly(medIBUPlot)
+
+
+
+```
+  
+
+
+## Highest IBU and ABV Beers  
+
+THe tables below show the top 5 beers in our data set in terms of ABV and IBU. Two of the top 5 IBU beers are located in Boulder, CO but all five beers are a different style. The top 5 beers in terms of ABV are all a variation of an American IPA.   
+
+```{r maxABV}
+
+kable(head(beer_merged[order(-beer_merged$ABV),c(1,6,8,9,10,4,3)], n=5), caption = "Top 5 ABV Beers") %>%  
+  kable_styling()
+kable(head(beer_merged[order(-beer_merged$IBU),c(1,6,8,9,10,4,3)], n=5),caption = "Top 5 IBU Beers") %>%  
+  kable_styling()
+
+
+```
+
+##  Summary and Distribution of ABV
+
+The average ABV of all beers is 5.97% while the median is 5.64% indicating a slightly right-skewed distribution. The histogram below reflects this. Most beers appear to hover around the mean ABV with a few potential outliers with higher ABVs.
+
+```{r abv_stats}
+
+summary(beer_merged$ABV)
+
+beer_merged %>% ggplot(aes(x=ABV, color="Orange")) + 
+  geom_histogram(binwidth=0.0025) +
+  ggtitle("Distibution of ABV for All beers") +
+  theme(legend.position = "none")
+
+
+```
+
+## Relationship between IBU and ABV  
+
+The scatter plot below shows a positive linear relationship between ABV and IBU for all beers. Our correlation test results produce a correlation value of positive 0.58 on a scale of -1 to 1 is statistically significantly different from zero (p value ~ 0). Furthermore, we are 95% confident that the true correlation value is between 0.55 and 0.61.
+
+```{r scatter, message=FALSE}
+
+ggplot(beer_merged, aes(x=IBU, y= ABV)) +
+  geom_point(shape=1) + 
+  geom_smooth(method=lm) + # add linear regression line
+  ggtitle("Correlation between IBU and ABV") +
+  labs(x="IBU - Bitterness of the beer",y="ABV - Alcoholic content of the beer")
+
+# Pearson's product-moment correlation
+df<-unlist(cor.test(beer_merged$ABV,beer_merged$IBU))
+data.frame(Correlation_Value = round(as.numeric(unname(df[4])),2), P_Value = round(as.numeric(unname(df[3])),2))
+
+```
+
+
