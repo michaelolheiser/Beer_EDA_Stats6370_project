@@ -4,3 +4,4 @@ This repo contains the exploratory data analysis of data contained in breweries.
 
 project1_beer_analysis.Rmd contains the full data analysis and dicussion in R Markdown format
 
+project1_beer_analysis.html contains the knitted output in HTML format from the R markdown file metnioned above. 
