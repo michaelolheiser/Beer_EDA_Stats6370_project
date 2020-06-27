@@ -1,0 +1,153 @@
+---
+title: "DS6306 PROJECT 1"
+author: "Andre Mauldin"
+date: "6/21/2020"
+output: html_document
+---
+
+```{r}
+library(httr)
+library(tm) #text mining library provides the stopwords() function
+library(tidyr)
+library(plyr)
+library(jsonlite)
+library(dplyr)
+library(tidyverse)
+library(e1071) # contains naive bays
+library(caret)# contains confusionMatrix
+library(mvtnorm)
+library(class)
+library(maps)
+library(usmap)
+library(maps)
+library(plotly)
+```
+1.   How many breweries are present in each state?
+```{r}
+breweries = read.csv("C:/Users/cam94/Desktop/SMU/DS6306/CaseStudy1_2_2_2_2_2/Breweries.csv",header = TRUE)
+beers = read.csv("C:/Users/cam94/Desktop/SMU/DS6306/CaseStudy1_2_2_2_2_2/Beers.csv",header = TRUE)
+
+# rename columns so IDs match
+names(breweries) = c("ID", "Brewery Name", "City", "State")
+names(beers) = c("Beer Name", "Beer_ID", "ABV", "IBU", "ID", "Style", "Ounces")
+
+breweriesByState = breweries %>% group_by(State) %>%
+  count(countOfBreweries = n()) %>%
+  select("State", "countOfBreweries")
+names(breweriesByState) = c("State", "Breweries")
+data.frame(breweriesByState)
+
+breweries$State <- trimws(breweries$State)
+# use lat/lon data from us_map package to estomate center of state
+coordinates<-us_map(regions = "states")
+coordinates = coordinates %>% group_by(abbr) %>%
+  summarize(Lat = mean(y), Lon = mean(x))
+# re center some coordinates (work in progress)
+coordinates$Lat[coordinates$abbr=="AK"]=-1856040
+coordinates$Lat[coordinates$abbr=="HI"]=-2218611
+#sum breweries by state. "fips" is a key for us states 
+state_breweries<-breweries %>% group_by(State) %>%
+  summarise(Count_of_Breweries = n()) %>%
+  mutate(fips = fips(State)) %>%
+  inner_join(coordinates, by=c("State" = "abbr"))
+#plot us map 
+plot_usmap(data=state_breweries, values="Count_of_Breweries", color="black") +
+  geom_text(aes(x=Lon, y=Lat, label = Count_of_Breweries)) +
+  scale_fill_continuous(low="white", high="red", name="Number of Breweries") +
+  theme(legend.position = "right") 
+#top 10 states
+state_breweries %>% select(State, Count_of_Breweries) %>%
+  arrange(-Count_of_Breweries) %>% head(10)
+
+```
+2.   Merge beer data with the breweries data. Print the first 6 observations and the last six observations to check the merged file.  (RMD only, this does not need to be included in the presentation or the deck.)
+```{r}
+
+beers_breweries = full_join(beers, breweries, by = "ID")
+head(beers_breweries, 6)
+tail(beers_breweries, 6)
+```
+
+3.   Address the missing values in each column.
+One Sample t-test
+
+data:  beers_breweries$IBU
+t = -0.41425, df = 1404, p-value = 0.6788
+alternative hypothesis: true mean is not equal to 43
+95 percent confidence interval:
+ 41.35489 44.07145
+sample estimates:
+mean of x 
+ 42.71317 
+ 
+One Sample t-test
+
+data:  beers_breweries$ABV
+t = 0.012253, df = 2347, p-value = 0.9902
+alternative hypothesis: true mean is not equal to 0.05977
+95 percent confidence interval:
+ 0.05922540 0.06032145
+sample estimates:
+ mean of x 
+0.05977342 
+```{r}
+  sapply(beers_breweries, function(x) sum(is.na(x)))
+  
+  # test to see if substitute the NAs with the means
+  mean(beers_breweries$IBU, na.rm = TRUE) # mean is 42.71317
+  mean(beers_breweries$ABV, na.rm = TRUE) # mean is 0.05977
+  t.test(beers_breweries$IBU,  mu = 43, na.rm = TRUE)
+  t.test(beers_breweries$ABV,  mu = 0.05977, na.rm = TRUE)
+  
+  # replace NAs with the estimated mean rounded up
+  beers_breweries2 = beers_breweries %>%
+    mutate(IBU = ifelse(is.na(IBU), 43, IBU), ABV = ifelse(is.na(ABV), 0.06, ABV))
+  head(beers_breweries2)
+  
+```
+
+4.   Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare.
+```{r}
+  medians = data.frame(beers_breweries2 %>% group_by(State) %>%
+  summarize(median_ABV = median(ABV), median_IBU = median(IBU)))
+  medABVPlot = medians %>% ggplot(aes(x = State, y = median_ABV, fill = State )) + geom_col() + ggtitle("Median Alcohol Content by State")
+  medIBUPlot = medians %>% ggplot(aes(x = State, y = median_IBU, fill = State)) + geom_col() + ggtitle("Median Bitterness by State")
+  ggplotly(medABVPlot)
+  ggplotly(medIBUPlot)
+```
+
+5.   Which state has the maximum alcoholic (ABV) beer? Which state has the most bitter (IBU) beer?
+
+Washington D.C. has the highest alcohol content.  West Virginia has the beer that is the most bitter.
+```{r}
+
+```
+
+6.   Comment on the summary statistics and distribution of the ABV variable.
+
+The Alcohol by Volume forms a normal distribution with a few outliers.  The average alcohol by volume across all states is 5.98%.  Median alcohol by volume across all states is 5.7%.
+```{r}
+summary(beers_breweries2$ABV)
+t.test(beers_breweries2$ABV)
+hist_ABV = beers_breweries2 %>% ggplot(aes(x=ABV, color="Orange")) + geom_histogram()
+ggplotly(hist_ABV)
+```
+
+7.   Is there an apparent relationship between the bitterness of the beer and its alcoholic content? Draw a scatter plot.  Make your best judgment of a relationship and EXPLAIN your answer.
+```{r}
+options(scipen=999)
+scatterPlot = beers_breweries2 %>% ggplot(aes(x = ABV, y = IBU, color=State)) + geom_point()
+  ggplotly(scatterPlot)
+cor.test(beers_breweries2$ABV, beers_breweries2$IBU)
+```
+
+8.  Budweiser would also like to investigate the difference with respect to IBU and ABV between IPAs (India Pale Ales) and other types of Ale (any beer with “Ale” in its name other than IPA).  You decide to use KNN classification to investigate this relationship.  Provide statistical evidence one way or the other. You can of course assume your audience is comfortable with percentages … KNN is very easy to understand conceptually.
+
+In addition, while you have decided to use KNN to investigate this relationship (KNN is required) you may also feel free to supplement your response to this question with any other methods or techniques you have learned.  Creativity and alternative solutions are always encouraged.
+```{r}
+
+```
+
+9. Knock their socks off!  Find one other useful inference from the data that you feel Budweiser may be able to find value in.  You must convince them why it is important and back up your conviction with appropriate statistical evidence
+
+
