@@ -1,6 +1,6 @@
 ---
-title: 'Epxloratory Data Analysis of Beers and Breweries'
-author: "Michael Olheiser , Lijju Mathew, Andre Mauldin,"
+title: 'Exploratory Data Analysis of Beers and Breweries'
+author: "Michael Olheiser, Lijju Mathew, Andre Mauldin,"
 date: "6/26/2020"
 output: html_document
 ---
