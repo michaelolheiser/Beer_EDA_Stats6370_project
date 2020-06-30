@@ -116,6 +116,7 @@ percentage.plot <- missing.values %>%
       labs(title = "Percentage of missing values", x = 'Variable', y = "% of missing values")
 percentage.plot
 
+
 # Fill missing values with mean of that column
 tempData <- mice(BrewPub,m=1,maxit=0,meth='fastpmm',seed=500)
 BrewPubFinal <- complete(tempData,1)
@@ -182,3 +183,63 @@ cor.test(BrewPubFinal$ABV,BrewPub$IBU)
 # When we plot the ABV and IBU on a scatterplot and draw a regression line, it show evidence that there is a positive correlation.
 
 # The Pearson correlation coefficient, r, can take a range of values from +1 to -1. A value of 0 indicates that there is no association between the two variables. A value greater than 0 indicates a positive association; that is, as the value of one variable increases, so does the value of the other variable. Here we got the cor as 0.67 between ABV and IBU which suggests there  is a positive correlation.
+
+
+#Question 8: Budweiser would also like to investigate the difference with respect to IBU and ABV between IPAs (India Pale Ales) and other types of Ale (any beer with "Ale" in its name other than IPA). You decide to use KNN clustering to investigate this relationship. Provide statistical evidence one way or the other. You can of course assume your audience is comfortable with percentages . KNN is very easy to understand.
+
+```{r knn }
+
+BrewPubFinal$BeerType <- ifelse(grepl("Ale$", BrewPubFinal$Style, ignore.case = T), "Other Type Ale",
+ifelse(grepl("IPA$", BrewPubFinal$Style, ignore.case = T ), "India Pale Ale", "Other Type"))
+
+#Change BeerType to a factor and IBU/ABV to numeric
+BrewPubFinal$BeerType = as.factor(BrewPubFinal$BeerType)
+BrewPubFinal$ABV<-as.numeric(as.character(BrewPubFinal$ABV))
+BrewPubFinal$IBU<-as.numeric(as.character(BrewPubFinal$IBU))
+
+# When looking at the beers by ounces, it appears that IPAs have higher median ABV values than other Ales. 
+#Selecting for only IPAs and Other Ales.
+BrewPubIPAOther = BrewPubFinal %>% filter(!is.na(BeerType) & !is.na(IBU) &!is.na(ABV)) %>%  
+  filter(BeerType == "India Pale Ale" | BeerType == "Other Type Ale")
+summary(BrewPubIPAOther)
+BrewPubIPAOther = droplevels(BrewPubIPAOther, exclude = "Other Type")
+summary(BrewPubIPAOther)
+
+BrewPubIPAOther %>% ggplot(aes(x=IBU, ABV, color = BeerType)) + geom_point()
+
+set.seed(1000)
+iterations = 100
+splitPerc = .70
+trainIndices = sample(1:dim(BrewPubIPAOther)[1],round(splitPerc * dim(BrewPubIPAOther)[1]))
+train = BrewPubIPAOther[trainIndices,]
+test = BrewPubIPAOther[-trainIndices,]
+
+accs = data.frame(accuracy = numeric(iterations), k = numeric(iterations))
+for(i in 1:iterations)
+{
+    classifications = knn(train[,c(4,5)],test[,c(4,5)],train$BeerType, prob = TRUE, k = i)
+    table(test$BeerType,classifications)
+    CM = confusionMatrix(table(test$BeerType,classifications))
+  accs$accuracy[i] = CM$overall[1]
+  accs$k[i] = i
+}
+plot(accs$k,accs$accuracy, type = "l", xlab = "k", ylab="Accuracy")
+#k=9 since the accuracy graph seems to level off at a high point around there.
+classifications = knn(train[,c(4,5)],test[,c(4,5)],train$BeerType, prob = TRUE, k = 9)
+table(test$BeerType,classifications)
+CM = confusionMatrix(table(test$BeerType,classifications))
+CM
+```
+
+
+#Question 9 - Other Insights - ABV by Ounces
+```{r}
+library(usmap)
+library(ggplot2)
+library(mapproj)
+
+BrewPubIPAOther$Ounces<-as.factor(BrewPubIPAOther$Ounces)
+
+BrewPubIPAOther %>% ggplot(mapping=aes(x=IBU, y=ABV, fill=BeerType)) + geom_boxplot() + 
+  ggtitle("ABV by Ounces") + theme_economist()
+```
