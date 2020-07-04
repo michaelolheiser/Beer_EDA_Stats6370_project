@@ -208,7 +208,7 @@ summary(BrewPubIPAOther)
 BrewPubIPAOther %>% ggplot(aes(x=IBU, ABV, color = BeerType)) + geom_point()
 
 set.seed(1000)
-iterations = 100
+iterations = 20
 splitPerc = .70
 trainIndices = sample(1:dim(BrewPubIPAOther)[1],round(splitPerc * dim(BrewPubIPAOther)[1]))
 train = BrewPubIPAOther[trainIndices,]
@@ -231,6 +231,15 @@ CM = confusionMatrix(table(test$BeerType,classifications))
 CM
 ```
 
+#Question 9 - Other Insights - Niaeve Bayes
+# Naive Bayes method to investigate the difference with respect to IBU and ABV between IPAs and Other Type of Ale
+```{r}
+#We also tested wither a different model, the Naieve Bayes, would be a more accurate predictor.  This model is different in that it uses given data to predict an uknown factor using probabilities that are calculated from the known data.
+model = naiveBayes(BrewPubIPAOther[,c(3,4)],BrewPubIPAOther$BeerType)
+table(predict(model,BrewPubIPAOther[,c(3,4)]),BrewPubIPAOther$BeerType)
+CM = confusionMatrix(table(predict(model,BrewPubIPAOther[,c(3,4)]),BrewPubIPAOther$BeerType))
+CM
+```
 
 #Question 9 - Other Insights - ABV by Ounces
 ```{r}
@@ -240,6 +249,6 @@ library(mapproj)
 
 BrewPubIPAOther$Ounces<-as.factor(BrewPubIPAOther$Ounces)
 
-BrewPubIPAOther %>% ggplot(mapping=aes(x=IBU, y=ABV, fill=BeerType)) + geom_boxplot() + 
+BrewPubIPAOther %>% ggplot(mapping=aes(x=Ounces, y=ABV, fill=BeerType)) + geom_boxplot() + 
   ggtitle("ABV by Ounces") + theme_economist()
 ```
