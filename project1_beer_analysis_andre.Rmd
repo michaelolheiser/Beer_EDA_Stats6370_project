@@ -288,16 +288,32 @@ CM
 
 
 ```{r}
-ColoradoData = beer_merged %>% filter(State == "CO" & between(IBU, 65,75))
-ColoradoData %>% group_by(City) %>% count(City)
-CityPlot = ColoradoData %>% group_by(City) %>% 
-  summarize(count = n()) %>% 
-  ggplot(aes(x=reorder(City, count), y = count)) +
-  geom_bar(stat="identity", width=.5, fill="orange") +
-  labs(title="Number of Breweries Per State",
-     x = "Cities",
-     y = "Brewereis Count") +     
-     theme(axis.text.x = element_text(angle=65, vjust=0.6))
-ggplotly(CityPlot)
-ColoradoData %>% group_by(City) %>% count(brewery_name)
+masterAcc = matrix(nrow = iterations)
+masterSens = matrix(nrow = iterations)
+masterSpec = matrix(nrow = iterations)
+
+splitPerc = .7 #Training / Test split Percentage
+
+for(j in 1:iterations)
+{
+  
+  trainIndices = sample(1:dim(IPAandOther)[1],round(splitPerc * dim(IPAandOther)[1]))
+  train = IPAandOther[trainIndices,]
+  test = IPAandOther[-trainIndices,]
+  
+  model = naiveBayes(train[,c(3,4)],as.factor(train$Style))
+  table(predict(model,test[,c(3,4)]),as.factor(test$Style))
+  CM = confusionMatrix(table(predict(model,test[,c(3,4)]),as.factor(test$Style)))
+  masterAcc[j] = CM$overall[1]
+  masterSens[j] = CM$byClass[1]
+  masterSpec[j] = CM$byClass[2]
+}
+
+MeanAcc = colMeans(masterAcc)
+MeanSens = colMeans(masterSens)
+MeanSpec = colMeans(masterSpec)
+
+MeanAcc
+MeanSens
+MeanSpec
 ```
