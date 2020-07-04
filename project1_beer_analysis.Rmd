@@ -58,7 +58,7 @@ state_breweries<-breweries %>% dplyr::group_by(State) %>%
   inner_join(coordinates, by=c("State" = "abbr"))
 
 #plot us map 
-plot_usmap(data=state_breweries, values="Count_of_Breweries", color="black") +
+plot_usmap(data=state_breweries, values="Count_of_Breweries", color="black", labels=TRUE) +
   scale_fill_continuous(low="white", high="red", name="Number of Breweries") +
   theme(legend.position = "right") +
   ggtitle("Breweries in the United States")
@@ -186,6 +186,7 @@ ggplotly(medIBUPlot)
 
 
 ```
+
   
 
 
@@ -209,12 +210,18 @@ The average ABV of all beers is 5.97% while the median is 5.64% indicating a sli
 
 ```{r abv_stats}
 
-summary(beer_merged$ABV)
+summary(beer_merged$IBU)
 
 beer_merged %>% ggplot(aes(x=ABV, color="Orange")) + 
   geom_histogram(binwidth=0.0025) +
-  ggtitle("Distibution of ABV for All beers") +
+  ggtitle("Distribution of ABV for All beers") +
   theme(legend.position = "none")
+
+beer_merged %>% ggplot(aes(x=IBU, color="white")) + 
+  geom_histogram(bins=25) +
+  ggtitle("Distribution of IBU for All beers") +
+  theme(legend.position = "none")
+
 
 
 ```
@@ -237,4 +244,126 @@ data.frame(Correlation_Value = round(as.numeric(unname(df[4])),2), P_Value = rou
 
 ```
 
+## KNN Classification of IPAs and Ales
 
+```{r knn}
+
+beer_merged$beer_type <- ifelse(grepl("\\bale\\b", beer_merged$Style, ignore.case = T), "Other Ales",
+ifelse(grepl("\\bIPA\\b", beer_merged$Style, ignore.case = T ), "IPA", "Other"))
+
+#Change BeerType to a factor and IBU/ABV to numeric
+beer_merged$beer_type = as.factor(beer_merged$beer_type)
+
+# When looking at the beers by ounces, it appears that IPAs have higher median ABV values than other Ales. 
+#Selecting for only IPAs and Other Ales.
+BrewPubIPAOther = beer_merged %>% filter(!is.na(beer_type) & !is.na(IBU) &!is.na(ABV)) %>%  
+  filter(beer_type == "IPA" | beer_type == "Other Ales")
+BrewPubIPAOther = droplevels(BrewPubIPAOther, exclude = "Other")
+BrewPubIPAOther %>% ggplot(aes(x=IBU, ABV, color = beer_type)) + geom_point() + ggtitle("IBU vs ABV by Beer Type")
+
+# Split data into test/train and build KNN
+set.seed(1000)
+iterations = 100
+splitPerc = .70
+trainIndices = sample(1:dim(BrewPubIPAOther)[1],round(splitPerc * dim(BrewPubIPAOther)[1]))
+train = BrewPubIPAOther[trainIndices,]
+test = BrewPubIPAOther[-trainIndices,]
+
+# peform 100 iterations to find the best K value for KNN
+accs = data.frame(accuracy = numeric(iterations), k = numeric(iterations))
+for(i in 1:iterations)
+{
+    classifications = knn(train[,c(4,5)],test[,c(4,5)],train$beer_type, prob = TRUE, k = i)
+    table(test$beer_type,classifications)
+    CM = confusionMatrix(table(test$beer_type,classifications))
+  accs$accuracy[i] = CM$overall[1]
+  accs$k[i] = i
+}
+
+#plot used for reviewing K values. Max is chosen for final model
+#plot(accs$k,accs$accuracy, type = "l", xlab = "k", ylab="Accuracy")
+
+# Classify AlesIPAs with KNN; k=25 achieves the max accuracy
+classifications = knn(train[,c(4,5)],test[,c(4,5)],train$beer_type, prob = TRUE, k = accs$k[which.max(accs$accuracy)])
+
+CM = confusionMatrix(table(test$beer_type,classifications))
+
+knn_results<-data.frame(Model="KNN for Ale/IPA", 
+           Accuracy=CM$overall[1], 
+           Sensitivity=CM$byClass[1], 
+           Specificity=CM$byClass[2])
+
+kable(table(test$beer_type,classifications),caption="Confusion Matrix for Classifying Beer Type (Columns are Predictions)") %>% kable_styling()
+kable(knn_results) %>% kable_styling()
+
+
+```
+  
+## KNN Classification of Top 5 Beer Styles
+
+
+```{r knn2}
+
+beers_topfive<-beer_merged %>%
+  subset(Style %in% c("American IPA", 
+                      "American Pale Ale (APA)",
+                      "American Amber / Red Ale",
+                      "American Blonde Ale",
+                      "American Double / Imperial IPA" )) 
+
+#Change BeerType to a factor and IBU/ABV to numeric
+beers_topfive$Style = as.factor(beers_topfive$Style)
+
+# table for top 5 most common beers
+beers_topfive %>% group_by(Style) %>%
+  summarise(Count = n()) %>%
+  arrange(-Count) %>%
+  kable(caption = "Top 5 Most Common Beer Styles") %>%
+  kable_styling()
+
+# Create scatter plot for top 5 beers
+beers_topfive %>% ggplot(aes(x=IBU, ABV, color = Style)) + 
+  geom_point() + 
+  ggtitle("ABV vs IBU: Top 5 Most Common Beer Styles") 
+
+# Split data into test/train and build KNN
+set.seed(1000)
+iterations = 100
+splitPerc = .70
+trainIndices = sample(1:dim(beers_topfive)[1],round(splitPerc * dim(beers_topfive)[1]))
+train = beers_topfive[trainIndices,]
+test = beers_topfive[-trainIndices,]
+
+accs = data.frame(accuracy = numeric(iterations), k = numeric(iterations))
+for(i in 1:iterations)
+{
+    classifications = knn(train[,c(4,5)],test[,c(4,5)],train$Style, prob = TRUE, k = i)
+    table(test$Style,classifications)
+    CM = confusionMatrix(table(test$Style,classifications))
+  accs$accuracy[i] = CM$overall[1]
+  accs$k[i] = i
+}
+
+#plot used to review best K values
+#plot(accs$k,accs$accuracy, type = "l", xlab = "k", ylab="Accuracy")
+
+# Classify Top 5 beers in test set with KNN; k=5 achieves the max accuracy
+classifications = knn(train[,c(4,5)],test[,c(4,5)],train$Style, prob = TRUE, k = accs$k[which.max(accs$accuracy)])
+
+CM = confusionMatrix(table(test$Style,classifications))
+
+knn_results<-data.frame(
+          BeerStyle=c( "American Amber / Red Ale",
+                       "American Blonde Ale",
+                       "American Double / Imperial IPA",
+                       "American IPA", 
+                       "American Pale Ale (APA)"),
+           Accuracy=c(CM$byClass[1,11], CM$byClass[2,11], CM$byClass[3,11], CM$byClass[4,11], CM$byClass[5,11]),
+           Sensitivity=c(CM$byClass[1,1], CM$byClass[2,1], CM$byClass[3,1], CM$byClass[4,1], CM$byClass[5,1]),
+           Specificity=c(CM$byClass[1,2], CM$byClass[2,2], CM$byClass[3,2], CM$byClass[4,2], CM$byClass[5,2])
+        )
+
+kable(table(test$Style,classifications), caption="Confusion Matrix for Classifying Beer Style (Columns are Predictions)") %>% kable_styling()
+kable(knn_results) %>% kable_styling()
+
+```
