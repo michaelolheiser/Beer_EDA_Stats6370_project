@@ -3,6 +3,8 @@ title: 'Exploratory Data Analysis of Beers and Breweries'
 author: "Michael Olheiser, Lijju Mathew, Andre Mauldin,"
 date: "6/26/2020"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
@@ -29,7 +31,12 @@ library(plotly)
 
 ## Introduction  
   
-We will be exploring a data set of various beers and breweries provided by Anheuser Busch to assess the relationship between International Bitterness Units (IBU) and Alcohol By Volume (ABV). We will also seek to share other insights from this data related to IBU and ABV such as which beers have the highest IBU and ABV.
+We will be exploring a data set of various beers and breweries provided by Anheuser Busch to assess the relationship between International Bitterness Units (IBU) and Alcohol By Volume (ABV). We will also seek to share other insights such as below
+
+1. Distribution of breweries by state
+2. More on Alcohol content and bitterness of beers and its relationship
+3. Classification of beers
+4. Conclusion with key takeways and oppurtunities
 
 ```{r get_data}
 
@@ -75,7 +82,7 @@ breweries %>% dplyr::group_by(State) %>%
 
 ```
 
-
+## Joining Beer and Breweries dataset
 
 ```{r merge, include=FALSE}
 
@@ -187,8 +194,6 @@ ggplotly(medIBUPlot)
 
 ```
 
-  
-
 
 ## Highest IBU and ABV Beers  
 
@@ -298,10 +303,14 @@ kable(knn_results) %>% kable_styling()
 
 
 ```
+
+## Insights from KNN Classfication of IPA vs Other Ales
+
+1) IBU are clearly higher for IPA than other Ales and span a larger range.
+2) IPAs tend to be higher ABV than Other Ales
+
   
 ## KNN Classification of Top 5 Beer Styles
-
-
 ```{r knn2}
 
 beers_topfive<-beer_merged %>%
@@ -367,3 +376,25 @@ kable(table(test$Style,classifications), caption="Confusion Matrix for Classifyi
 kable(knn_results) %>% kable_styling()
 
 ```
+
+## Insights from KNN Classfication of Top 5 Common Beer Styles
+
+1) American Amber/Red and Blonde Ales are difficult to classify due to the overlap with other styles.
+2) Pale Ale,IPA, and Imperial IPAs are more distinctly separated by IBU/ABV
+
+
+
+## Conclusion
+
+Key Takeways:
+
+1) There are no obvious regional patterns in the distribution of breweries
+2) IBU are not regularly reported
+3) There is a moderate positive linear relationship between IBU and ABV
+4) Bi-modal distribution of IBU, could mean possibly different markets
+5) Not all styles of beer can be accurately classified by IBU/ABV
+
+Further Research:
+
+1) Distribution/Sales data – where is the beer going?
+2) Demographics, economics of states
