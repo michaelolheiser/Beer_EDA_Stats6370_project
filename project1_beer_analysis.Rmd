@@ -1,10 +1,8 @@
 ---
 title: 'Exploratory Data Analysis of Beers and Breweries'
 author: "Michael Olheiser, Lijju Mathew, Andre Mauldin,"
-date: "6/26/2020"
+date: "7/04/2020"
 output: html_document
-editor_options: 
-  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
@@ -31,12 +29,7 @@ library(plotly)
 
 ## Introduction  
   
-We will be exploring a data set of various beers and breweries provided by Anheuser Busch to assess the relationship between International Bitterness Units (IBU) and Alcohol By Volume (ABV). We will also seek to share other insights such as below
-
-1. Distribution of breweries by state
-2. More on Alcohol content and bitterness of beers and its relationship
-3. Classification of beers
-4. Conclusion with key takeways and oppurtunities
+We will be exploring a data set of various beers and breweries provided by Anheuser Busch to assess the relationship between International Bitterness Units (IBU) and Alcohol By Volume (ABV) and how they relate to styles of beer. We will also seek to share other insights from this data related to IBU and ABV such as which beers have the highest IBU and ABV.
 
 ```{r get_data}
 
@@ -47,7 +40,7 @@ breweries<-read.csv("Breweries.csv", stringsAsFactors = FALSE)
 
 ## Breweries by State
   
-The top three states with the most breweries in our data set are California, Colorado, and Michigan. It is not surprising for California to top this list due to their population but Colorado and Michigan have considerably lower populations yet still maintain a higher number of breweries indicating that population is not the only factor that determines the number of breweries in a state. It's likely that certain cultural and economic aspects of the population influence the number of breweries in that state as well. Furthermore, the mpa of the US shows that Breweries do not dominate any particular region of the US.     
+The top three states with the most breweries in our data set are California, Colorado, and Michigan. It is not surprising for California to top this list due to their population but Colorado and Michigan have considerably lower populations yet still maintain a higher number of breweries indicating that population is not the only factor that determines the number of breweries in a state. It's likely that certain cultural and economic aspects of the population influence the number of breweries in that state as well. Furthermore, the map of the US shows that Breweries do not dominate any particular region of the US.     
 
 ```{r map, message=FALSE, warning=FALSE}
 
@@ -82,7 +75,7 @@ breweries %>% dplyr::group_by(State) %>%
 
 ```
 
-## Joining Beer and Breweries dataset
+
 
 ```{r merge, include=FALSE}
 
@@ -194,10 +187,12 @@ ggplotly(medIBUPlot)
 
 ```
 
+  
+
 
 ## Highest IBU and ABV Beers  
 
-THe tables below show the top 5 beers in our data set in terms of ABV and IBU. Two of the top 5 IBU beers are located in Boulder, CO but all five beers are a different style. The top 5 beers in terms of ABV are all a variation of an American IPA.   
+The tables below show the top 5 beers in our data set in terms of ABV and IBU. Two of the top 5 ABV beers are located in Boulder, CO but all five beers are a different style. The top 5 beers in terms of IBU are all a variation of an American IPA.   
 
 ```{r maxABV}
 
@@ -209,18 +204,23 @@ kable(head(beer_merged[order(-beer_merged$IBU),c(1,6,8,9,10,4,3)], n=5),caption 
 
 ```
 
-##  Summary and Distribution of ABV
+##  Summary and Distribution of ABV and IBU
 
-The average ABV of all beers is 5.97% while the median is 5.64% indicating a slightly right-skewed distribution. The histogram below reflects this. Most beers appear to hover around the mean ABV with a few potential outliers with higher ABVs.
+The average ABV of all beers is 5.97% while the median is 5.64% indicating a slightly right-skewed distribution. The histogram below reflects this as well. Most beers appear to hover around the mean ABV with a few potential outliers with higher ABVs. IBU on the other hand has a more complex distribution that may be bi-modal seen by the two separate spikes. Our interpretation is that two types of consumers may exist in terms of IBU. That is, consumers who seek out bitter beers versus those who don't. It's important to note which type of consumer you are trying to market to when creating a new beer. 
+
+
 
 ```{r abv_stats}
 
-summary(beer_merged$IBU)
+summary(beer_merged$ABV)
+
 
 beer_merged %>% ggplot(aes(x=ABV, color="Orange")) + 
   geom_histogram(binwidth=0.0025) +
   ggtitle("Distribution of ABV for All beers") +
   theme(legend.position = "none")
+
+summary(beer_merged$IBU)
 
 beer_merged %>% ggplot(aes(x=IBU, color="white")) + 
   geom_histogram(bins=25) +
@@ -233,7 +233,7 @@ beer_merged %>% ggplot(aes(x=IBU, color="white")) +
 
 ## Relationship between IBU and ABV  
 
-The scatter plot below shows a positive linear relationship between ABV and IBU for all beers. Our correlation test results produce a correlation value of positive 0.58 on a scale of -1 to 1 is statistically significantly different from zero (p value ~ 0). Furthermore, we are 95% confident that the true correlation value is between 0.55 and 0.61.
+The scatter plot below shows a positive linear relationship between ABV and IBU for all beers. Our test results produce a correlation value of  0.58 on a scale of -1 to 1 which is statistically significantly different from zero (p value ~ 0). Furthermore, we are 95% confident that the true correlation value is between 0.55 and 0.61.
 
 ```{r scatter, message=FALSE}
 
@@ -249,9 +249,12 @@ data.frame(Correlation_Value = round(as.numeric(unname(df[4])),2), P_Value = rou
 
 ```
 
-## KNN Classification of IPAs and Ales
+## KNN Classification of IPAs and Ales  
+  
+ABV and IBU are defining characteristics of beer and its style. In this section, we will explore a classification model known as K-Nearest Neighbors (KNN) to predict which beers are IPAs or another type of Ale.  The scatter plot below suggetss that a grouping of Ales and IPAs exists in terms of ABV and IBU. 
 
-```{r knn}
+
+```{r knn_scatter}
 
 beer_merged$beer_type <- ifelse(grepl("\\bale\\b", beer_merged$Style, ignore.case = T), "Other Ales",
 ifelse(grepl("\\bIPA\\b", beer_merged$Style, ignore.case = T ), "IPA", "Other"))
@@ -266,6 +269,12 @@ BrewPubIPAOther = beer_merged %>% filter(!is.na(beer_type) & !is.na(IBU) &!is.na
 BrewPubIPAOther = droplevels(BrewPubIPAOther, exclude = "Other")
 BrewPubIPAOther %>% ggplot(aes(x=IBU, ABV, color = beer_type)) + geom_point() + ggtitle("IBU vs ABV by Beer Type")
 
+
+```
+    
+We will build a KNN model using ABV and IBU. The method of KNN looks at a specified number of beers, "k", located near the beer of interest in terms of ABV and IBU so that those that are close in ABV and IBU will be grouped accordingly. The choice of "k" was determined by running our model 100 times and choosing the value with the best accuracy. The confusion matrix below represents the predictions by the KNN model as columns and the actual beer type as rows.  
+  
+``` {r knn1}
 # Split data into test/train and build KNN
 set.seed(1000)
 iterations = 100
@@ -302,16 +311,18 @@ kable(table(test$beer_type,classifications),caption="Confusion Matrix for Classi
 kable(knn_results) %>% kable_styling()
 
 
+
+
 ```
+ 
+The overall accuracy of the mode, that is the percentage of correct matches, is 89% which is fairly successful. It is clear that IPAs can be accurately distinguished from other types of Ales in terms of ABV and IBU. More specifically, IPAs tend to be more bitter and more alcoholic than their Ale counterparts. IN the next section, we will explore further classification of beer styles beyond IPAs.    
 
-## Insights from KNN Classfication of IPA vs Other Ales
-
-1) IBU are clearly higher for IPA than other Ales and span a larger range.
-2) IPAs tend to be higher ABV than Other Ales
-
-  
 ## KNN Classification of Top 5 Beer Styles
-```{r knn2}
+  
+We have selected the top 5 most common styles of beers in our dataset seen below. In essence, these are the most popularly brewed beers and we wish to determine if it's possible to classify these beers by their style using ABV and IBU similar to the previous section. The scatter plot below suggests some obvious grouping of IPA, Imperial IPA, and Pale Ales, but beyond those styles, there is quite a bit of overlap that may make it difficult to classify. 
+  
+
+```{r knn_scatter2}
 
 beers_topfive<-beer_merged %>%
   subset(Style %in% c("American IPA", 
@@ -334,6 +345,14 @@ beers_topfive %>% group_by(Style) %>%
 beers_topfive %>% ggplot(aes(x=IBU, ABV, color = Style)) + 
   geom_point() + 
   ggtitle("ABV vs IBU: Top 5 Most Common Beer Styles") 
+
+
+```
+
+  
+Again we will use a KNN model with the value of K selected by repeating the process 100 times and finding the k value that achieves the best accuracy. The results of the model are seen below. 
+
+```{r knn2}
 
 # Split data into test/train and build KNN
 set.seed(1000)
@@ -367,9 +386,7 @@ knn_results<-data.frame(
                        "American Double / Imperial IPA",
                        "American IPA", 
                        "American Pale Ale (APA)"),
-           Accuracy=c(CM$byClass[1,11], CM$byClass[2,11], CM$byClass[3,11], CM$byClass[4,11], CM$byClass[5,11]),
-           Sensitivity=c(CM$byClass[1,1], CM$byClass[2,1], CM$byClass[3,1], CM$byClass[4,1], CM$byClass[5,1]),
-           Specificity=c(CM$byClass[1,2], CM$byClass[2,2], CM$byClass[3,2], CM$byClass[4,2], CM$byClass[5,2])
+           Balanced_Accuracy=c(CM$byClass[1,11], CM$byClass[2,11], CM$byClass[3,11], CM$byClass[4,11], CM$byClass[5,11])
         )
 
 kable(table(test$Style,classifications), caption="Confusion Matrix for Classifying Beer Style (Columns are Predictions)") %>% kable_styling()
@@ -377,24 +394,29 @@ kable(knn_results) %>% kable_styling()
 
 ```
 
-## Insights from KNN Classfication of Top 5 Common Beer Styles
-
-1) American Amber/Red and Blonde Ales are difficult to classify due to the overlap with other styles.
-2) Pale Ale,IPA, and Imperial IPAs are more distinctly separated by IBU/ABV
-
-
-
+  
+Our confusion matrix now contains 5 possible styles to choose from for each beer where the columns represent the Style chosen by the model, and the rows are the actual Styles taken from the data set. Finally, the results are summarised using a Balanced Accuracy measurement for each Style to show how well our model does at classifying each Style. As we expected from the visual inspection of the Scatter plot, the model is more capable of classifying American IPA, American Imperial IPA, and American Pale Ales than the rest due to the significant overlapping that occurs in lower ABV and IBU beers. Ultimately, beers such as IPAs and Double IPAs are characterized by their IBU and ABV content.
+  
 ## Conclusion
+  
+This report has presented our findings from an exploratory dat analysis of various beers and breweries across the United States. We focused on insights using ABV and IBU, their relationship, and classifications. Some of our key takeaways are shown below. 
 
-Key Takeways:
+* No obvious regional patterns in the US of brewery locations
 
-1) There are no obvious regional patterns in the distribution of breweries
-2) IBU are not regularly reported
-3) There is a moderate positive linear relationship between IBU and ABV
-4) Bi-modal distribution of IBU, could mean possibly different markets
-5) Not all styles of beer can be accurately classified by IBU/ABV
+* IBU is not regularly reported and must be inferred from Styles or other methods when doing analysis. 
 
-Further Research:
+* There is a Positive linear relationship between IBU and ABV
 
-1) Distribution/Sales data – where is the beer going?
-2) Demographics, economics of states
+* A Bi-modal distribution of IBU may indicate two different consumer markets
+
+* Not all styles of beer can be accurately classified by IBU/ABV
+
+  
+Finally, we would like to mention a few areas of further research that could help gain more insight into some of of our findings
+
+* More advanced methods for determining IBU when they are not reported b the Brewery. 
+
+* Distribution/Sales data to determine where the beer is being shipped
+
+* Demographics and economic data to gain insight into the culture of states that drive beer sales and production. 
+
