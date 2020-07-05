@@ -6,5 +6,5 @@ project1_beer_analysis.Rmd contains the full data analysis and dicussion in R Ma
 
 project1_beer_analysis.html contains the knitted output in HTML format from the R markdown file metnioned above. 
 
-Project 1 DDS Beer Data Analysis.pdf is the presentation output from Powerpoint
+Project 1 DDS Beer Data Analysis.pdf/ppt is the presentation output from Powerpoint
 
